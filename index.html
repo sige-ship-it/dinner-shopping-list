@@ -82,12 +82,12 @@
                     </div>
                 </div>
 
-                <!-- 【新機能】5. 食材マスタのバックアップ管理エリア -->
+                <!-- 5. 食材マスタの管理（消去対策） -->
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <h2 class="text-sm font-bold mb-2 flex items-center gap-1 text-gray-600">
-                        <span>📦</span> 5. 食材マスタの管理（消去対策）
+                        <span>📦</span> 5. 食材マスタの管理
                     </h2>
-                    <p class="text-[11px] text-gray-400 mb-3">自分が登録した「料理と食材のペア」を保存・復元できます。</p>
+                    <p class="text-[11px] text-gray-400 mb-3">登録した「料理と食材のペア」を保存・復元できます。</p>
                     <div class="grid grid-cols-1 gap-2">
                         <button id="downloadMasterBtn" class="w-full py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-medium transition-colors">
                             📤 食材マスタをPCに保存する
@@ -134,14 +134,12 @@
     </div>
 
     <script>
-        // 初回起動時、一度もデータが登録されていない場合だけ使われる仮データ
         const defaultRecipeIngredients = {
             "カレー": ["カレールー", "玉ねぎ", "人参", "じゃがいも", "豚肉"],
             "ハンバーグ": ["合挽き肉", "玉ねぎ", "卵", "パン粉", "牛乳"],
             "生姜焼き": ["豚肉", "玉ねぎ", "生姜", "キャベツ"]
         };
 
-        // ★【最優先】ブラウザの記憶庫にデータがあれば、上記のdefaultは無視してそちらを100%使う
         let recipeIngredients = JSON.parse(localStorage.getItem('savedRecipeIngredients'));
         if (!recipeIngredients || Object.keys(recipeIngredients).length === 0) {
             recipeIngredients = defaultRecipeIngredients;
@@ -164,7 +162,6 @@
             document.getElementById('saveMealBtn').addEventListener('click', saveMealForSelectedDate);
             document.getElementById('downloadCsvBtn').addEventListener('click', downloadCsvFile);
             
-            // マスタ管理ボタンのイベント登録
             document.getElementById('downloadMasterBtn').addEventListener('click', downloadMasterCsv);
             document.getElementById('uploadMasterFile').addEventListener('change', uploadMasterCsv);
 
@@ -191,8 +188,9 @@
                 })
                 .catch(error => {
                     console.error(error);
-                    statusEl.textContent = "❌ 晩御飯.csv の自動読込に失敗しました。下のボタンから手動選択してください。";
+                    statusEl.textContent = "❌ 自動読込できませんでした。下のボタンから手動選択してください。";
                     statusEl.className = "text-xs font-bold text-rose-600";
+                    updateApp();
                 });
         }
 
@@ -231,11 +229,11 @@
                 if (index === 0 && !rawDate.match(/^\d+/)) return;
 
                 if (rawDate) {
-                    rawDate = rawDate.replace(/[^\d\/\-]/g, '').replace(/-/g, '/');
-                    const dateParts = rawDate.split('/');
+                    rawDate = rawDate.replace(/[^\d\/\-]/g, '').replace(/\//g, '-');
+                    const dateParts = rawDate.split('-');
                     
                     if (dateParts.length === 3) {
-                        const normalizedDate = `${dateParts[0]}/${dateParts[1].padStart(2, '0')}/${dateParts[2].padStart(2, '0')}`;
+                        const normalizedDate = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
                         
                         let names = [];
                         for (let i = 1; i < columns.length; i++) {
@@ -254,34 +252,30 @@
                     }
                 }
             });
-            uploadedMeals.sort((a, b) => new Date(a.date) - new Date(b.date));
         }
 
         function saveMealForSelectedDate() {
             const calendarDate = document.getElementById('targetDate').value;
             if (!calendarDate) return;
-            const targetCsvDate = calendarDate.replace(/-/g, '/');
             
             const inputVal = document.getElementById('newMealInput').value.trim();
             const newMeals = inputVal.split(/[,，、\s]+/).filter(m => m !== "");
 
-            const existingIndex = uploadedMeals.findIndex(meal => meal.date === targetCsvDate);
+            const existingIndex = uploadedMeals.findIndex(meal => meal.date === calendarDate);
 
             if (newMeals.length === 0) {
                 if (existingIndex !== -1) {
                     uploadedMeals.splice(existingIndex, 1);
                 }
-                alert(`${targetCsvDate} の献立をクリアしました。`);
+                alert(`${calendarDate} の献立をクリアしました。`);
             } else {
                 if (existingIndex !== -1) {
                     uploadedMeals[existingIndex].names = newMeals;
                 } else {
-                    uploadedMeals.push({ date: targetCsvDate, names: newMeals });
+                    uploadedMeals.push({ date: calendarDate, names: newMeals });
                 }
-                alert(`${targetCsvDate} の献立を更新しました！`);
+                alert(`${calendarDate} の献立を更新しました！`);
             }
-            
-            uploadedMeals.sort((a, b) => new Date(a.date) - new Date(b.date));
             updateApp();
         }
 
@@ -298,7 +292,6 @@
             triggerDownload(csvContent, "晩御飯.csv");
         }
 
-        // ★【新機能】食材マスタをCSVとして書き出す
         function downloadMasterCsv() {
             let csvContent = "料理名,必要食材1,必要食材2,必要食材3,必要食材4,必要食材5,必要食材6,必要食材7,必要食材8,必要食材9\n";
             for (const [meal, ingredients] of Object.entries(recipeIngredients)) {
@@ -309,7 +302,6 @@
             triggerDownload(csvContent, "食材マスタ_バックアップ.csv");
         }
 
-        // ★【新機能】保存してあった食材マスタのCSVからデータを復元する
         function uploadMasterCsv(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -320,7 +312,7 @@
                 let newMaster = {};
 
                 lines.forEach((line, index) => {
-                    if (!line.trim() || index === 0) return; // ヘッダーはスキップ
+                    if (!line.trim() || index === 0) return; 
                     const columns = line.split(',');
                     const mealName = columns[0]?.trim();
                     if (!mealName) return;
@@ -363,14 +355,13 @@
         function updateApp() {
             const calendarDate = document.getElementById('targetDate').value;
             if (!calendarDate) return;
-            const targetCsvDate = calendarDate.replace(/-/g, '/');
 
             const mealListEl = document.getElementById('mealList');
             const selectedMealsDiv = document.getElementById('selectedMeals');
             const ingredientsContainer = document.getElementById('requiredIngredientsContainer');
             const mealInputEl = document.getElementById('newMealInput');
 
-            const dayData = uploadedMeals.find(meal => meal.date === targetCsvDate);
+            const dayData = uploadedMeals.find(meal => meal.date === calendarDate);
             const todaysMeals = dayData ? dayData.names : [];
 
             mealInputEl.value = todaysMeals.join(', ');
@@ -421,7 +412,7 @@
                 return;
             }
             if (todaysMeals.length === 0) {
-                ingredientsContainer.innerHTML = `<p class="text-gray-400 italic text-sm col-span-full">${targetCsvDate} の献立予定は登録されていません。</p>';
+                ingredientsContainer.innerHTML = `<p class="text-gray-400 italic text-sm col-span-full">${calendarDate} の献立予定は登録されていません。</p>`;
                 renderShoppingList([]);
                 return;
             }
@@ -542,13 +533,8 @@
             localStorage.setItem('savedRecipeIngredients', JSON.stringify(recipeIngredients));
         }
 
-        document.getElementById('newMealInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') { saveMealForSelectedDate(); }
-        });
-
         function copyToClipboard() {
             const calendarDate = document.getElementById('targetDate').value;
-            const targetCsvDate = calendarDate.replace(/-/g, '/');
             const items = Array.from(document.getElementById('shoppingListContainer').querySelectorAll('div')).map(el => el.innerText.replace('🛑', '').trim());
             
             if (items.length === 0 || items[0].includes('揃いました') || items[0].includes('生成されます')) {
@@ -556,7 +542,7 @@
                 return;
             }
 
-            const textToCopy = `【${targetCsvDate}の買い物リスト】\n` + items.map(item => `- ${item}`).join('\n');
+            const textToCopy = `【${calendarDate}の買い物リスト】\n` + items.map(item => `- ${item}`).join('\n');
             navigator.clipboard.writeText(textToCopy).then(() => {
                 alert('買い物リストをコピーしました！');
             }).catch(err => {
