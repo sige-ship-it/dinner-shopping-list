@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>買い物リスト自動生成アプリ</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800 font-sans pb-12">
+
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <!-- ヘッダー -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-emerald-600 mb-2">🛒 買い物リスト自動生成</h1>
+            <p class="text-gray-600 text-sm">ボタンを押して献立CSVファイルを読み込んでください</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- 左側 -->
+            <div class="md:col-span-1 space-y-6">
+                <!-- 1. 献立CSV読み込み（ボタン式に改良） -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-bold mb-3 flex items-center gap-2 text-gray-700">
+                        <span>📅</span> 1. 献立の読み込み
+                    </h2>
+                    
+                    <!-- ファイル選択を行うための隠しインプット -->
+                    <input type="file" id="csvFile" accept=".csv" class="hidden"/>
+                    
+                    <!-- 押しやすい大きな読込ボタン -->
+                    <button id="customUploadBtn" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2">
+                        <span>📂</span> 献立ファイルを開く
+                    </button>
+
+                    <!-- 前回読み込んだファイル名を表示するエリア -->
+                    <div id="historyStatus" class="text-[11px] text-gray-500 mt-2 bg-gray-50 p-2 rounded border border-gray-100 hidden">
+                        <span class="font-semibold text-gray-600">前回読み込んだファイル:</span> <span id="lastFileName" class="text-emerald-700 font-bold">なし</span>
+                    </div>
+
+                    <div id="uploadStatus" class="text-xs mt-2 text-gray-500 font-medium">ファイルを読み込んでください</div>
+                </div>
+
+                <!-- 2. 日付選択 -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-bold mb-3 flex items-center gap-2 text-gray-700">
+                        <span>🔍</span> 2. 対象日の選択
+                    </h2>
+                    <input type="date" id="targetDate" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    
+                    <div id="selectedMeals" class="mt-3 p-3 bg-gray-50 rounded-lg text-sm hidden">
+                        <span class="font-bold text-emerald-700">本日の献立:</span>
+                        <ul id="mealList" class="list-disc list-inside mt-1 text-gray-600 space-y-1"></ul>
+                    </div>
+                </div>
+
+                <!-- 3. 献立マスタの手動編集エリア -->
+                <div id="masterEditorSection" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hidden">
+                    <h2 class="text-lg font-bold mb-1 flex items-center gap-2 text-amber-700">
+                        <span>🛠️</span> 食材マスタの編集
+                    </h2>
+                    <p class="text-xs text-gray-500 mb-3" id="editorTargetLabel">料理名</p>
+                    
+                    <div class="space-y-2">
+                        <input type="text" id="newIngredientInput" placeholder="例: ひき肉 (エンターで追加)" 
+                            class="w-full p-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                        
+                        <div id="currentMasterIngredients" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-1 bg-gray-50 rounded border border-gray-100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側 -->
+            <div class="md:col-span-2 space-y-6">
+                <!-- 3. 必要な食材 -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                    <h2 class="text-lg font-bold mb-2 flex items-center gap-2 text-gray-700">
+                        <span>🥦</span> 3. 必要な食材（冷蔵庫にあればチェック）
+                    </h2>
+                    <p class="text-xs text-gray-500 mb-4">※その日のすべての献立に必要な食材が自動で合算されます。</p>
+                    
+                    <div id="requiredIngredientsContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <p class="text-gray-400 italic text-sm col-span-full">上のボタンから献立ファイルを読み込んでください</p>
+                    </div>
+                </div>
+
+                <!-- 4. 最終買い物リスト -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border-2 border-emerald-500">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold flex items-center gap-2 text-emerald-700">
+                            <span>📝</span> 4. 不足している買い物リスト
+                        </h2>
+                        <button id="copyListBtn" class="px-3 py-1 text-xs bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 font-medium transition-colors">
+                            リストをコピー
+                        </button>
+                    </div>
+                    
+                    <div id="shoppingListContainer" class="space-y-2">
+                        <p class="text-gray-400 italic text-sm">足りないものがリアルタイムで抽出されます</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const defaultRecipeIngredients = {
+            "カレー": ["カレールー", "玉ねぎ", "人参", "じゃがいも", "豚肉"],
+            "ハンバーグ": ["合挽き肉", "玉ねぎ", "卵", "パン粉", "牛乳"],
+            "生姜焼き": ["豚肉", "玉ねぎ", "生姜", "キャベツ"],
+            "野菜炒め": ["豚肉", "キャベツ", "人参", "ピーマン", "もやし"],
+            "味噌汁": ["豆腐", "わかめ", "油揚げ", "味噌"],
+            "サラダ": ["レタス", "トマト", "きゅうり", "ドレッシング"],
+            "回鍋肉": ["豚肉", "キャベツ", "ピーマン", "長ねぎ", "甜麺醤"],
+            "オムライス": ["鶏肉", "玉ねぎ", "卵", "ケチャップ", "ご飯"],
+            "コロッケ": ["じゃがいも", "ひき肉", "玉ねぎ", "小麦粉", "卵", "パン粉"]
+        };
+
+        let recipeIngredients = JSON.parse(localStorage.getItem('savedRecipeIngredients')) || defaultRecipeIngredients;
+        let uploadedMeals = []; 
+        let fridgeInventory = new Set(); 
+        let editingMealName = ""; 
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('targetDate').value = `${yyyy}-${mm}-${dd}`;
+
+            // ボタンクリックで隠しインプットを発火させる
+            const customBtn = document.getElementById('customUploadBtn');
+            const fileInput = document.getElementById('csvFile');
+            customBtn.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', handleFileUpload);
+            document.getElementById('targetDate').addEventListener('change', handleDateChange);
+            document.getElementById('copyListBtn').addEventListener('click', copyToClipboard);
+            
+            document.getElementById('newIngredientInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') { addIngredientToMaster(); }
+            });
+
+            // 前回読み込んだファイル名があれば履歴に表示
+            loadFileNameHistory();
+        });
+
+        // 履歴を読み込む関数
+        function loadFileNameHistory() {
+            const savedName = localStorage.getItem('lastUploadedFileName');
+            if (savedName) {
+                document.getElementById('lastFileName').textContent = savedName;
+                document.getElementById('historyStatus').classList.remove('hidden');
+                document.getElementById('uploadStatus').textContent = `前回「${savedName}」を使用しました。上のボタンから選択してください。`;
+            }
+        }
+
+        function handleDateChange() {
+            fridgeInventory.clear(); 
+            updateApp();
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // ファイル名をブラウザに記憶させる
+            localStorage.setItem('lastUploadedFileName', file.name);
+            document.getElementById('lastFileName').textContent = file.name;
+            document.getElementById('historyStatus').classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                parseCSV(e.target.result);
+                fridgeInventory.clear();
+                updateApp();
+                
+                const statusEl = document.getElementById('uploadStatus');
+                statusEl.textContent = `✅ 「${file.name}」を読み込みました (${uploadedMeals.length}日分)`;
+                statusEl.className = "text-xs mt-2 text-emerald-600 font-bold";
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function parseCSV(text) {
+            uploadedMeals = [];
+            const lines = text.split(/\r?\n/);
+            
+            lines.forEach((line, index) => {
+                if (!line.trim()) return;
+
+                const columns = line.split(',');
+                if (columns.length < 2) return; 
+
+                let rawDate = columns[0]?.trim();
+                if (index === 0 && !rawDate.match(/^\d+/)) return;
+
+                if (rawDate) {
+                    rawDate = rawDate.replace(/[^\d\/\-]/g, '').replace(/-/g, '/');
+                    const dateParts = rawDate.split('/');
+                    
+                    if (dateParts.length === 3) {
+                        const normalizedDate = `${dateParts[0]}/${dateParts[1].padStart(2, '0')}/${dateParts[2].padStart(2, '0')}`;
+                        
+                        let names = [];
+                        for (let i = 1; i < columns.length; i++) {
+                            const mealName = columns[i]?.trim();
+                            if (mealName && mealName !== "" && 
+                                !mealName.includes('メニュー') && 
+                                !mealName.includes('献立') && 
+                                !mealName.includes('日にち') && 
+                                !mealName.includes('日付')) {
+                                names.push(mealName);
+                            }
+                        }
+
+                        if (names.length > 0) {
+                            uploadedMeals.push({ date: normalizedDate, names: names });
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateApp() {
+            const calendarDate = document.getElementById('targetDate').value;
+            if (!calendarDate) return;
+            const targetCsvDate = calendarDate.replace(/-/g, '/');
+
+            const mealListEl = document.getElementById('mealList');
+            const selectedMealsDiv = document.getElementById('selectedMeals');
+            const ingredientsContainer = document.getElementById('requiredIngredientsContainer');
+
+            const dayData = uploadedMeals.find(meal => meal.date === targetCsvDate);
+            const todaysMeals = dayData ? dayData.names : [];
+
+            mealListEl.innerHTML = '';
+            if (todaysMeals.length > 0) {
+                todaysMeals.forEach(name => {
+                    const li = document.createElement('li');
+                    li.className = "flex justify-between items-center py-1 border-b border-gray-100 last:border-0";
+                    
+                    const span = document.createElement('span');
+                    span.textContent = name;
+                    
+                    if (!recipeIngredients[name] || recipeIngredients[name].length === 0) {
+                        span.className = "text-rose-600 font-medium flex items-center gap-1 text-sm";
+                        span.innerHTML += `<span class="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-normal">要食材設定</span>`;
+                    } else {
+                        span.className = "text-sm font-medium text-gray-700";
+                    }
+
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = "🛠️ 食材編集";
+                    editBtn.className = "text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded hover:bg-amber-200 transition-colors";
+                    editBtn.addEventListener('click', () => openMasterEditor(name));
+
+                    li.appendChild(span);
+                    li.appendChild(editBtn);
+                    mealListEl.appendChild(li);
+                });
+                selectedMealsDiv.classList.remove('hidden');
+            } else {
+                selectedMealsDiv.classList.add('hidden');
+                document.getElementById('masterEditorSection').classList.add('hidden');
+            }
+
+            let requiredSet = new Set();
+            todaysMeals.forEach(name => {
+                const ingredients = recipeIngredients[name] || [];
+                ingredients.forEach(item => requiredSet.add(item));
+            });
+            const currentRequiredIngredients = Array.from(requiredSet).sort();
+
+            ingredientsContainer.innerHTML = '';
+            
+            if (uploadedMeals.length === 0) {
+                ingredientsContainer.innerHTML = '<p class="text-gray-400 italic text-sm col-span-full">上の「献立ファイルを開く」ボタンからファイルを選んでください。</p>';
+                renderShoppingList([]);
+                return;
+            }
+            if (todaysMeals.length === 0) {
+                ingredientsContainer.innerHTML = `<p class="text-gray-400 italic text-sm col-span-full">${targetCsvDate} の献立予定は登録されていません。</p>`;
+                renderShoppingList([]);
+                return;
+            }
+
+            if (currentRequiredIngredients.length === 0) {
+                ingredientsContainer.innerHTML = `<p class="text-rose-500 italic text-sm font-medium col-span-full">⚠️ 献立の食材が登録されていません。上の「食材編集」ボタンから登録してください。</p>`;
+                renderShoppingList([]);
+                return;
+            }
+
+            currentRequiredIngredients.forEach(item => {
+                const label = document.createElement('label');
+                label.className = "flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 cursor-pointer text-sm transition-colors";
+                
+                if (fridgeInventory.has(item)) {
+                    label.classList.add('bg-emerald-50', 'border-emerald-200');
+                }
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = fridgeInventory.has(item);
+                checkbox.className = "rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4";
+                
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) { fridgeInventory.add(item); } 
+                    else { fridgeInventory.delete(item); }
+                    updateApp(); 
+                });
+
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(item));
+                ingredientsContainer.appendChild(label);
+            });
+
+            let shoppingList = currentRequiredIngredients.filter(item => !fridgeInventory.has(item));
+            renderShoppingList(shoppingList, currentRequiredIngredients.length);
+        }
+
+        function renderShoppingList(shoppingList, totalRequiredCount) {
+            const shoppingContainer = document.getElementById('shoppingListContainer');
+            shoppingContainer.innerHTML = '';
+
+            if (uploadedMeals.length === 0 || totalRequiredCount === 0) {
+                shoppingContainer.innerHTML = '<p class="text-gray-400 italic text-sm">必要な食材が登録されると、ここにリストが生成されます。</p>';
+                return;
+            }
+
+            if (shoppingList.length === 0) {
+                shoppingContainer.innerHTML = '<p class="text-emerald-600 font-bold text-sm">🎉 必要な食材はすべて冷蔵庫に揃いました！買い物は不要です。</p>';
+                return;
+            }
+
+            shoppingList.forEach(item => {
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200 text-amber-950 font-medium";
+                div.innerHTML = `<span>🛑</span> <span>${item}</span>`;
+                shoppingContainer.appendChild(div);
+            });
+        }
+
+        function openMasterEditor(mealName) {
+            editingMealName = mealName;
+            document.getElementById('editorTargetLabel').innerHTML = `対象料理: <strong class="text-amber-800 text-sm">${mealName}</strong>`;
+            document.getElementById('masterEditorSection').classList.remove('hidden');
+            renderEditorBadges();
+        }
+
+        function renderEditorBadges() {
+            const badgeContainer = document.getElementById('currentMasterIngredients');
+            badgeContainer.innerHTML = '';
+            const list = recipeIngredients[editingMealName] || [];
+
+            if (list.length === 0) {
+                badgeContainer.innerHTML = '<p class="text-xs text-gray-400 italic p-1">登録されている食材がありません</p>';
+                return;
+            }
+
+            list.forEach(item => {
+                const span = document.createElement('span');
+                span.className = "inline-flex items-center gap-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-xs border border-amber-200 font-medium";
+                span.textContent = item;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.innerHTML = "&times;";
+                removeBtn.className = "hover:text-rose-600 font-bold ml-1 text-sm text-amber-600";
+                removeBtn.addEventListener('click', () => removeIngredientFromMaster(item));
+
+                span.appendChild(removeBtn);
+                badgeContainer.appendChild(span);
+            });
+        }
+
+        function addIngredientToMaster() {
+            const inputEl = document.getElementById('newIngredientInput');
+            const newIngredient = inputEl.value.trim();
+            if (!newIngredient) return;
+
+            if (!recipeIngredients[editingMealName]) { recipeIngredients[editingMealName] = []; }
+
+            if (!recipeIngredients[editingMealName].includes(newIngredient)) {
+                recipeIngredients[editingMealName].push(newIngredient);
+                saveMasterToLocalStorage();
+                renderEditorBadges();
+                updateApp();
+            }
+            inputEl.value = "";
+        }
+
+        function removeIngredientFromMaster(itemToDelete) {
+            if (!recipeIngredients[editingMealName]) return;
+            recipeIngredients[editingMealName] = recipeIngredients[editingMealName].filter(item => item !== itemToDelete);
+            saveMasterToLocalStorage();
+            renderEditorBadges();
+            updateApp();
+        }
+
+        function saveMasterToLocalStorage() {
+            localStorage.setItem('savedRecipeIngredients', JSON.stringify(recipeIngredients));
+        }
+
+        function copyToClipboard() {
+            const calendarDate = document.getElementById('targetDate').value;
+            const targetCsvDate = calendarDate.replace(/-/g, '/');
+            const items = Array.from(document.getElementById('shoppingListContainer').querySelectorAll('div')).map(el => el.innerText.replace('🛑', '').trim());
+            
+            if (items.length === 0 || items[0].includes('揃いました') || items[0].includes('生成されます')) {
+                alert('コピーする買い物リストがありません。');
+                return;
+            }
+
+            const textToCopy = `【${targetCsvDate}の買い物リスト】\n` + items.map(item => `- ${item}`).join('\n');
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert('買い物リストをコピーしました！');
+            }).catch(err => {
+                alert('コピーに失敗しました。');
+            });
+        }
+    </script>
+</body>
+</html>
