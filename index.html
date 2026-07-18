@@ -389,7 +389,11 @@
                     const editBtn = document.createElement('button');
                     editBtn.textContent = "🛠️ 食材編集";
                     editBtn.className = "text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded hover:bg-amber-200 transition-colors";
-                    editBtn.addEventListener('click', () => openMasterEditor(name));
+                    
+                    // 安全なクリックイベントを設定
+                    editBtn.onclick = function() {
+                        openMasterEditor(name);
+                    };
 
                     li.appendChild(span);
                     li.appendChild(editBtn);
@@ -478,21 +482,27 @@
         }
 
         function openMasterEditor(mealName) {
-            editingMealName = mealName;
-            const editorSection = document.getElementById('masterEditorSection');
-            document.getElementById('editorTargetLabel').innerHTML = `対象料理: <strong class="text-amber-800 text-sm">${mealName}</strong>`;
-            
-            // 非表示を解除してスクロールさせる
-            editorSection.classList.remove('hidden');
-            renderEditorBadges();
+            try {
+                editingMealName = mealName;
+                const editorSection = document.getElementById('masterEditorSection');
+                document.getElementById('editorTargetLabel').innerHTML = `対象料理: <strong class="text-amber-800 text-sm">${mealName}</strong>`;
+                
+                // 非表示を確実に解除
+                editorSection.classList.remove('hidden');
+                renderEditorBadges();
 
-            // 編集エリアまで自動でスムーズスクロール
-            editorSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            // 入力欄に自動でカーソルを合わせる
-            setTimeout(() => {
-                document.getElementById('newIngredientInput').focus();
-            }, 300);
+                // ポップアップ通知を出して、どこに画面が出たかを案内する
+                alert(`「${mealName}」の食材編集画面を左下に表示しました。ページを少し下にスクロールして食材を入力してください。`);
+
+                // 確実に入力欄へフォーカス
+                const inputField = document.getElementById('newIngredientInput');
+                if (inputField) {
+                    inputField.focus();
+                }
+            } catch (err) {
+                console.error(err);
+                alert("エラーが発生しました: " + err.message);
+            }
         }
 
         function renderEditorBadges() {
@@ -534,7 +544,7 @@
                 updateApp();
             }
             inputEl.value = "";
-            inputEl.focus(); // 連続入力しやすいようにフォーカスを維持
+            inputEl.focus();
         }
 
         function removeIngredientFromMaster(itemToDelete) {
