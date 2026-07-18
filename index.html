@@ -13,32 +13,25 @@
         <!-- ヘッダー -->
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-emerald-600 mb-2">🛒 買い物リスト自動生成</h1>
-            <p class="text-gray-600 text-sm">ボタンを押して献立CSVファイルを読み込んでください</p>
+            <p class="text-gray-600 text-sm">起動時に「晩御飯.csv」を全自動で読み込みます</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- 左側 -->
             <div class="md:col-span-1 space-y-6">
-                <!-- 1. 献立CSV読み込み（ボタン式に改良） -->
+                <!-- 1. 状態表示（クラウド自動読込） -->
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <h2 class="text-lg font-bold mb-3 flex items-center gap-2 text-gray-700">
                         <span>📅</span> 1. 献立の読み込み
                     </h2>
+                    <div id="uploadStatus" class="text-sm font-bold text-amber-600">⏳ 「晩御飯.csv」を自動読込中...</div>
                     
-                    <!-- ファイル選択を行うための隠しインプット -->
-                    <input type="file" id="csvFile" accept=".csv" class="hidden"/>
-                    
-                    <!-- 押しやすい大きな読込ボタン -->
-                    <button id="customUploadBtn" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2">
-                        <span>📂</span> 献立ファイルを開く
-                    </button>
-
-                    <!-- 前回読み込んだファイル名を表示するエリア -->
-                    <div id="historyStatus" class="text-[11px] text-gray-500 mt-2 bg-gray-50 p-2 rounded border border-gray-100 hidden">
-                        <span class="font-semibold text-gray-600">前回読み込んだファイル:</span> <span id="lastFileName" class="text-emerald-700 font-bold">なし</span>
-                    </div>
-
-                    <div id="uploadStatus" class="text-xs mt-2 text-gray-500 font-medium">ファイルを読み込んでください</div>
+                    <!-- バックアップ用の手動選択インプットも念のため残します -->
+                    <label class="block mt-4 pt-4 border-t border-gray-100">
+                        <span class="text-xs text-gray-400 block mb-1">別のCSVを手動で読み込む場合:</span>
+                        <input type="file" id="csvFile" accept=".csv" 
+                            class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"/>
+                    </label>
                 </div>
 
                 <!-- 2. 日付選択 -->
@@ -81,7 +74,7 @@
                     <p class="text-xs text-gray-500 mb-4">※その日のすべての献立に必要な食材が自動で合算されます。</p>
                     
                     <div id="requiredIngredientsContainer" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        <p class="text-gray-400 italic text-sm col-span-full">上のボタンから献立ファイルを読み込んでください</p>
+                        <p class="text-gray-400 italic text-sm col-span-full">自動読込を待っています...</p>
                     </div>
                 </div>
 
@@ -129,12 +122,7 @@
             const dd = String(today.getDate()).padStart(2, '0');
             document.getElementById('targetDate').value = `${yyyy}-${mm}-${dd}`;
 
-            // ボタンクリックで隠しインプットを発火させる
-            const customBtn = document.getElementById('customUploadBtn');
-            const fileInput = document.getElementById('csvFile');
-            customBtn.addEventListener('click', () => fileInput.click());
-
-            fileInput.addEventListener('change', handleFileUpload);
+            document.getElementById('csvFile').addEventListener('change', handleFileUpload);
             document.getElementById('targetDate').addEventListener('change', handleDateChange);
             document.getElementById('copyListBtn').addEventListener('click', copyToClipboard);
             
@@ -142,18 +130,32 @@
                 if (e.key === 'Enter') { addIngredientToMaster(); }
             });
 
-            // 前回読み込んだファイル名があれば履歴に表示
-            loadFileNameHistory();
+            // 【クラウド専用】同じ場所にある「晩御飯.csv」を完全自動読み込み
+            autoLoadCSV();
         });
 
-        // 履歴を読み込む関数
-        function loadFileNameHistory() {
-            const savedName = localStorage.getItem('lastUploadedFileName');
-            if (savedName) {
-                document.getElementById('lastFileName').textContent = savedName;
-                document.getElementById('historyStatus').classList.remove('hidden');
-                document.getElementById('uploadStatus').textContent = `前回「${savedName}」を使用しました。上のボタンから選択してください。`;
-            }
+        function autoLoadCSV() {
+            const statusEl = document.getElementById('uploadStatus');
+            // キャッシュを防ぐためにタイムスタンプを付与
+            fetch('晩御飯.csv?v=' + new Date().getTime())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('CSVファイルが見つかりません');
+                    }
+                    return response.text();
+                })
+                .then(text => {
+                    parseCSV(text);
+                    fridgeInventory.clear();
+                    updateApp();
+                    statusEl.textContent = `✅ 晩御飯.csv を自動読込しました (${uploadedMeals.length}日分)`;
+                    statusEl.className = "text-sm font-bold text-emerald-600";
+                })
+                .catch(error => {
+                    console.error(error);
+                    statusEl.textContent = "❌ 晩御飯.csv の自動読込に失敗しました。下のボタンから手動選択してください。";
+                    statusEl.className = "text-xs font-bold text-rose-600";
+                });
         }
 
         function handleDateChange() {
@@ -165,11 +167,6 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            // ファイル名をブラウザに記憶させる
-            localStorage.setItem('lastUploadedFileName', file.name);
-            document.getElementById('lastFileName').textContent = file.name;
-            document.getElementById('historyStatus').classList.remove('hidden');
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 parseCSV(e.target.result);
@@ -177,8 +174,8 @@
                 updateApp();
                 
                 const statusEl = document.getElementById('uploadStatus');
-                statusEl.textContent = `✅ 「${file.name}」を読み込みました (${uploadedMeals.length}日分)`;
-                statusEl.className = "text-xs mt-2 text-emerald-600 font-bold";
+                statusEl.textContent = `✅ 手動読込: ${file.name} (${uploadedMeals.length}日分)`;
+                statusEl.className = "text-sm font-bold text-emerald-600";
             };
             reader.readAsText(file, 'UTF-8');
         }
@@ -276,7 +273,7 @@
             ingredientsContainer.innerHTML = '';
             
             if (uploadedMeals.length === 0) {
-                ingredientsContainer.innerHTML = '<p class="text-gray-400 italic text-sm col-span-full">上の「献立ファイルを開く」ボタンからファイルを選んでください。</p>';
+                ingredientsContainer.innerHTML = '<p class="text-gray-400 italic text-sm col-span-full">CSVファイルを自動読込中、または見つかりません。</p>';
                 renderShoppingList([]);
                 return;
             }
@@ -342,6 +339,7 @@
             });
         }
 
+        // --- マスタ編集関連の関数群 ---
         function openMasterEditor(mealName) {
             editingMealName = mealName;
             document.getElementById('editorTargetLabel').innerHTML = `対象料理: <strong class="text-amber-800 text-sm">${mealName}</strong>`;
