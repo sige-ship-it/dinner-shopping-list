@@ -67,7 +67,7 @@
                 </div>
 
                 <!-- 4. 食材マスタの手動編集エリア -->
-                <div id="masterEditorSection" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hidden">
+                <div id="masterEditorSection" class="bg-white p-5 rounded-xl shadow-sm border-2 border-amber-500 hidden">
                     <h2 class="text-lg font-bold mb-1 flex items-center gap-2 text-amber-700">
                         <span>🛠️</span> 食材マスタの編集
                     </h2>
@@ -76,8 +76,11 @@
                     <div class="space-y-2">
                         <input type="text" id="newIngredientInput" placeholder="例: ひき肉 (エンターで追加)" 
                             class="w-full p-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                        <button id="addIngredientBtn" class="w-full py-1.5 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700 transition-colors">
+                            食材を追加する
+                        </button>
                         
-                        <div id="currentMasterIngredients" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-1 bg-gray-50 rounded border border-gray-100">
+                        <div id="currentMasterIngredients" class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-2 bg-gray-50 rounded border border-gray-100 mt-2">
                         </div>
                     </div>
                 </div>
@@ -164,6 +167,7 @@
             
             document.getElementById('downloadMasterBtn').addEventListener('click', downloadMasterCsv);
             document.getElementById('uploadMasterFile').addEventListener('change', uploadMasterCsv);
+            document.getElementById('addIngredientBtn').addEventListener('click', addIngredientToMaster);
 
             document.getElementById('newIngredientInput').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') { addIngredientToMaster(); }
@@ -418,7 +422,7 @@
             }
 
             if (currentRequiredIngredients.length === 0) {
-                ingredientsContainer.innerHTML = `<p class="text-rose-500 italic text-sm font-medium col-span-full">⚠️ 献立の食材が登録されていません。上の「食材編集」ボタンから登録してください。</p>`;
+                ingredientsContainer.innerHTML = `<p class="text-rose-500 italic text-sm font-medium col-span-full">⚠️ 献立の食材が登録されていません。左の「食材編集」ボタンから登録してください。</p>`;
                 renderShoppingList([]);
                 return;
             }
@@ -475,9 +479,20 @@
 
         function openMasterEditor(mealName) {
             editingMealName = mealName;
+            const editorSection = document.getElementById('masterEditorSection');
             document.getElementById('editorTargetLabel').innerHTML = `対象料理: <strong class="text-amber-800 text-sm">${mealName}</strong>`;
-            document.getElementById('masterEditorSection').classList.remove('hidden');
+            
+            // 非表示を解除してスクロールさせる
+            editorSection.classList.remove('hidden');
             renderEditorBadges();
+
+            // 編集エリアまで自動でスムーズスクロール
+            editorSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // 入力欄に自動でカーソルを合わせる
+            setTimeout(() => {
+                document.getElementById('newIngredientInput').focus();
+            }, 300);
         }
 
         function renderEditorBadges() {
@@ -492,12 +507,12 @@
 
             list.forEach(item => {
                 const span = document.createElement('span');
-                span.className = "inline-flex items-center gap-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-xs border border-amber-200 font-medium";
+                span.className = "inline-flex items-center gap-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-xs border border-amber-200 font-medium m-0.5";
                 span.textContent = item;
 
                 const removeBtn = document.createElement('button');
                 removeBtn.innerHTML = "&times;";
-                removeBtn.className = "hover:text-rose-600 font-bold ml-1 text-sm text-amber-600";
+                removeBtn.className = "hover:text-rose-600 font-bold ml-1 text-sm text-amber-600 px-0.5";
                 removeBtn.addEventListener('click', () => removeIngredientFromMaster(item));
 
                 span.appendChild(removeBtn);
@@ -519,6 +534,7 @@
                 updateApp();
             }
             inputEl.value = "";
+            inputEl.focus(); // 連続入力しやすいようにフォーカスを維持
         }
 
         function removeIngredientFromMaster(itemToDelete) {
