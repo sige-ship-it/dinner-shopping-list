@@ -13,7 +13,7 @@
         <!-- ヘッダー -->
         <header class="text-center mb-8">
             <h1 class="text-3xl font-bold text-emerald-600 mb-2">🛒 買い物リスト自動生成</h1>
-            <p class="text-gray-600 text-sm">起動時に「晩御飯.csv」を全自動で読み込みます</p>
+            <p class="text-gray-600 text-sm">起動時に「晩御飯.csv」および「食材.csv」を自動読み込みします</p>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -25,9 +25,10 @@
                         <span>📅</span> 1. 献立の読み込み
                     </h2>
                     <div id="uploadStatus" class="text-sm font-bold text-amber-600">⏳ 「晩御飯.csv」を自動読込中...</div>
+                    <div id="ingredientStatus" class="text-xs text-gray-500 mt-1">⏳ 「食材.csv」を自動読込中...</div>
                     
                     <label class="block mt-4 pt-4 border-t border-gray-100">
-                        <span class="text-xs text-gray-400 block mb-1">別のCSVを手動で読み込む場合:</span>
+                        <span class="text-xs text-gray-400 block mb-1">別の献立CSVを手動で読み込む場合:</span>
                         <input type="file" id="csvFile" accept=".csv" 
                             class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer"/>
                     </label>
@@ -56,12 +57,12 @@
                         <input type="text" id="newMealInput" placeholder="例: カレー、ハンバーグ" 
                             class="w-full p-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:outline-none">
                         <button id="saveMealBtn" class="w-full py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors">
-                            この日の献立を上書き保存
+                            この日の献立を変更
                         </button>
                     </div>
                     <div class="mt-4 pt-4 border-t border-gray-100">
                         <button id="downloadCsvBtn" class="w-full py-2 bg-gray-800 text-white rounded-md text-xs font-medium hover:bg-gray-900 transition-colors flex items-center justify-center gap-1">
-                            <span>📥</span> 編集後のCSVをダウンロード
+                            <span>📥</span> 編集後の献立CSV(晩御飯.csv)を出力
                         </button>
                     </div>
                 </div>
@@ -85,18 +86,18 @@
                     </div>
                 </div>
 
-                <!-- 5. 食材マスタの管理（消去対策） -->
+                <!-- 5. 食材マスタの管理（ファイル操作） -->
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <h2 class="text-sm font-bold mb-2 flex items-center gap-1 text-gray-600">
-                        <span>📦</span> 5. 食材マスタの管理
+                        <span>📦</span> 5. 食材マスタの管理 (食材.csv)
                     </h2>
-                    <p class="text-[11px] text-gray-400 mb-3">登録した「料理と食材のペア」を保存・復元できます。</p>
+                    <p class="text-[11px] text-gray-400 mb-3">登録した「献立と食材」のデータをファイルに書き込み/復元できます。</p>
                     <div class="grid grid-cols-1 gap-2">
-                        <button id="downloadMasterBtn" class="w-full py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-medium transition-colors">
-                            📤 食材マスタをPCに保存する
+                        <button id="downloadMasterBtn" class="w-full py-1.5 bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 rounded text-xs font-medium transition-colors">
+                            📤 食材.csv に書き出して保存する
                         </button>
                         <label class="block w-full text-center py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-medium cursor-pointer transition-colors">
-                            📥 保存したマスタから復元する
+                            📥 食材.csv から手動で読み込む
                             <input type="file" id="uploadMasterFile" accept=".csv" class="hidden"/>
                         </label>
                     </div>
@@ -143,11 +144,7 @@
             "生姜焼き": ["豚肉", "玉ねぎ", "生姜", "キャベツ"]
         };
 
-        let recipeIngredients = JSON.parse(localStorage.getItem('savedRecipeIngredients'));
-        if (!recipeIngredients || Object.keys(recipeIngredients).length === 0) {
-            recipeIngredients = defaultRecipeIngredients;
-        }
-
+        let recipeIngredients = { ...defaultRecipeIngredients };
         let uploadedMeals = []; 
         let fridgeInventory = new Set(); 
         let editingMealName = ""; 
@@ -174,8 +171,10 @@
             });
 
             autoLoadCSV();
+            autoLoadIngredientCSV();
         });
 
+        // 「晩御飯.csv」の自動読み込み
         function autoLoadCSV() {
             const statusEl = document.getElementById('uploadStatus');
             fetch('晩御飯.csv?v=' + new Date().getTime())
@@ -192,10 +191,59 @@
                 })
                 .catch(error => {
                     console.error(error);
-                    statusEl.textContent = "❌ 自動読込できませんでした。下のボタンから手動選択してください。";
+                    statusEl.textContent = "❌ 晩御飯.csv を自動読込できませんでした。下のボタンから手動選択してください。";
                     statusEl.className = "text-xs font-bold text-rose-600";
                     updateApp();
                 });
+        }
+
+        // 「食材.csv」の自動読み込み
+        function autoLoadIngredientCSV() {
+            const ingStatusEl = document.getElementById('ingredientStatus');
+            fetch('食材.csv?v=' + new Date().getTime())
+                .then(response => {
+                    if (!response.ok) throw new Error('食材.csvが見つかりません');
+                    return response.text();
+                })
+                .then(text => {
+                    parseIngredientCSVText(text);
+                    ingStatusEl.textContent = `✅ 食材.csv を自動読込しました (${Object.keys(recipeIngredients).length}品分)`;
+                    ingStatusEl.className = "text-xs font-bold text-emerald-600 mt-1";
+                    updateApp();
+                })
+                .catch(error => {
+                    console.error(error);
+                    ingStatusEl.textContent = "⚠️ 食材.csv の自動読込なし (デフォルトデータを使用中)";
+                    ingStatusEl.className = "text-xs text-gray-400 mt-1";
+                });
+        }
+
+        // 「食材.csv」のテキスト解析処理
+        function parseIngredientCSVText(text) {
+            const lines = text.split(/\r?\n/);
+            let newMaster = {};
+
+            lines.forEach((line, index) => {
+                if (!line.trim()) return; 
+                const columns = line.split(',');
+                const mealName = columns[0]?.trim();
+                if (!mealName || mealName === '献立' || mealName === '料理名') return;
+
+                let ingredients = [];
+                for (let i = 1; i < columns.length; i++) {
+                    const ing = columns[i]?.trim();
+                    if (ing && ing !== "") {
+                        ingredients.push(ing);
+                    }
+                }
+                if (ingredients.length > 0) {
+                    newMaster[mealName] = ingredients;
+                }
+            });
+
+            if (Object.keys(newMaster).length > 0) {
+                recipeIngredients = newMaster;
+            }
         }
 
         function handleDateChange() {
@@ -278,7 +326,7 @@
                 } else {
                     uploadedMeals.push({ date: calendarDate, names: newMeals });
                 }
-                alert(`${calendarDate} の献立を更新しました！`);
+                alert(`${calendarDate} の献立を変更しました！`);
             }
             updateApp();
         }
@@ -297,13 +345,13 @@
         }
 
         function downloadMasterCsv() {
-            let csvContent = "料理名,必要食材1,必要食材2,必要食材3,必要食材4,必要食材5,必要食材6,必要食材7,必要食材8,必要食材9\n";
+            let csvContent = "献立,食材1,食材2,食材3,食材4,食材5,食材6,食材7,食材8,食材9,食材10\n";
             for (const [meal, ingredients] of Object.entries(recipeIngredients)) {
                 if (ingredients.length > 0) {
                     csvContent += [meal, ...ingredients].join(',') + "\n";
                 }
             }
-            triggerDownload(csvContent, "食材マスタ_バックアップ.csv");
+            triggerDownload(csvContent, "食材.csv");
         }
 
         function uploadMasterCsv(event) {
@@ -312,33 +360,9 @@
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                const lines = e.target.result.split(/\r?\n/);
-                let newMaster = {};
-
-                lines.forEach((line, index) => {
-                    if (!line.trim() || index === 0) return; 
-                    const columns = line.split(',');
-                    const mealName = columns[0]?.trim();
-                    if (!mealName) return;
-
-                    let ingredients = [];
-                    for(let i=1; i<columns.length; i++) {
-                        const ing = columns[i]?.trim();
-                        if (ing) ingredients.push(ing);
-                    }
-                    if (ingredients.length > 0) {
-                        newMaster[mealName] = ingredients;
-                    }
-                });
-
-                if (Object.keys(newMaster).length > 0) {
-                    recipeIngredients = newMaster;
-                    saveMasterToLocalStorage();
-                    updateApp();
-                    alert(`✅ 食材マスタをファイルから復元しました！ (${Object.keys(newMaster).length}品分)`);
-                } else {
-                    alert('❌ 正しいマスタデータが読み込めませんでした。');
-                }
+                parseIngredientCSVText(e.target.result);
+                updateApp();
+                alert(`✅ 「食材.csv」からデータを読み込みました！ (${Object.keys(recipeIngredients).length}品分)`);
             };
             reader.readAsText(file, 'UTF-8');
         }
@@ -390,7 +414,6 @@
                     editBtn.textContent = "🛠️ 食材編集";
                     editBtn.className = "text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded hover:bg-amber-200 transition-colors";
                     
-                    // 安全なクリックイベントを設定
                     editBtn.onclick = function() {
                         openMasterEditor(name);
                     };
@@ -487,14 +510,9 @@
                 const editorSection = document.getElementById('masterEditorSection');
                 document.getElementById('editorTargetLabel').innerHTML = `対象料理: <strong class="text-amber-800 text-sm">${mealName}</strong>`;
                 
-                // 非表示を確実に解除
                 editorSection.classList.remove('hidden');
                 renderEditorBadges();
 
-                // ポップアップ通知を出して、どこに画面が出たかを案内する
-                alert(`「${mealName}」の食材編集画面を左下に表示しました。ページを少し下にスクロールして食材を入力してください。`);
-
-                // 確実に入力欄へフォーカス
                 const inputField = document.getElementById('newIngredientInput');
                 if (inputField) {
                     inputField.focus();
@@ -539,7 +557,6 @@
 
             if (!recipeIngredients[editingMealName].includes(newIngredient)) {
                 recipeIngredients[editingMealName].push(newIngredient);
-                saveMasterToLocalStorage();
                 renderEditorBadges();
                 updateApp();
             }
@@ -550,13 +567,8 @@
         function removeIngredientFromMaster(itemToDelete) {
             if (!recipeIngredients[editingMealName]) return;
             recipeIngredients[editingMealName] = recipeIngredients[editingMealName].filter(item => item !== itemToDelete);
-            saveMasterToLocalStorage();
             renderEditorBadges();
             updateApp();
-        }
-
-        function saveMasterToLocalStorage() {
-            localStorage.setItem('savedRecipeIngredients', JSON.stringify(recipeIngredients));
         }
 
         function copyToClipboard() {
